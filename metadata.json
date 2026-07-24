@@ -1,0 +1,6 @@
+{
+  "name": "Flat Meal Manager",
+  "description": "Manage daily flat tiffin orders, polls, guest meals, monthly bill splits, and UPI QR payments.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
