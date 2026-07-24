@@ -21,6 +21,7 @@ import { FlatSettings } from '../types';
 
 export const SettingsView: React.FC = () => {
   const { settings, updateSettings, clearDemoData, isDarkMode, toggleDarkMode, currentUser } = useApp();
+  const isAdmin = currentUser.role === 'admin';
   const [confirmClearOpen, setConfirmClearOpen] = useState(false);
 
   const [flatName, setFlatName] = useState(settings.flatName);
@@ -42,6 +43,7 @@ export const SettingsView: React.FC = () => {
 
   const handleSave = (e: React.FormEvent) => {
     e.preventDefault();
+    if (!isAdmin) return;
 
     const newSettings: FlatSettings = {
       flatName: flatName.trim(),
@@ -80,13 +82,22 @@ export const SettingsView: React.FC = () => {
           </p>
         </div>
 
-        <button
-          onClick={handleSave}
-          className="px-5 py-2.5 rounded-2xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs uppercase tracking-wider shadow-md shadow-indigo-200 dark:shadow-none transition-all inline-flex items-center gap-2 shrink-0"
-        >
-          <Save className="w-4 h-4" /> Save All Settings
-        </button>
+        {isAdmin && (
+          <button
+            onClick={handleSave}
+            className="px-5 py-2.5 rounded-2xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs uppercase tracking-wider shadow-md shadow-indigo-200 dark:shadow-none transition-all inline-flex items-center gap-2 shrink-0"
+          >
+            <Save className="w-4 h-4" /> Save All Settings
+          </button>
+        )}
       </div>
+
+      {!isAdmin && (
+        <div className="p-4 rounded-2xl bg-amber-50 dark:bg-amber-950/60 border border-amber-200 dark:border-amber-900/60 text-amber-800 dark:text-amber-200 text-xs font-semibold flex items-center gap-2.5">
+          <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
+          <span>Settings are read-only for regular members. Only Flat Admin can change the Payee UPI ID and payment configuration.</span>
+        </div>
+      )}
 
       <form onSubmit={handleSave} className="space-y-6">
         {/* General Flat Details */}
@@ -103,10 +114,11 @@ export const SettingsView: React.FC = () => {
               <input
                 type="text"
                 required
+                disabled={!isAdmin}
                 value={flatName}
                 onChange={(e) => setFlatName(e.target.value)}
                 placeholder="e.g. Flat 302 Sunshine Heights"
-                className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-emerald-500 disabled:opacity-60"
               />
             </div>
 
@@ -115,9 +127,10 @@ export const SettingsView: React.FC = () => {
                 Currency Symbol
               </label>
               <select
+                disabled={!isAdmin}
                 value={currency}
                 onChange={(e) => setCurrency(e.target.value)}
-                className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-xs font-bold focus:outline-none"
+                className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-xs font-bold focus:outline-none disabled:opacity-60"
               >
                 <option value="₹">₹ (Indian Rupee)</option>
                 <option value="$">$ (US Dollar)</option>
@@ -132,10 +145,11 @@ export const SettingsView: React.FC = () => {
               </label>
               <input
                 type="text"
+                disabled={!isAdmin}
                 value={tiffinProviderName}
                 onChange={(e) => setTiffinProviderName(e.target.value)}
                 placeholder="e.g. Annapurna Gourmet Tiffin Service"
-                className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-xs focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-xs focus:outline-none focus:ring-2 focus:ring-emerald-500 disabled:opacity-60"
               />
             </div>
 
@@ -145,10 +159,11 @@ export const SettingsView: React.FC = () => {
               </label>
               <input
                 type="text"
+                disabled={!isAdmin}
                 value={tiffinProviderPhone}
                 onChange={(e) => setTiffinProviderPhone(e.target.value)}
                 placeholder="+91 98000 11223"
-                className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-xs focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-xs focus:outline-none focus:ring-2 focus:ring-emerald-500 disabled:opacity-60"
               />
             </div>
           </div>
@@ -157,7 +172,7 @@ export const SettingsView: React.FC = () => {
         {/* UPI Payment Config */}
         <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 shadow-sm space-y-4">
           <h3 className="font-extrabold font-heading text-base text-slate-900 dark:text-white flex items-center gap-2">
-            <QrCode className="w-5 h-5 text-emerald-500" /> Payee UPI ID Configuration
+            <QrCode className="w-5 h-5 text-emerald-500" /> Payee UPI ID Configuration (Admin Only)
           </h3>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -168,10 +183,11 @@ export const SettingsView: React.FC = () => {
               <input
                 type="text"
                 required
+                disabled={!isAdmin}
                 value={upiId}
                 onChange={(e) => setUpiId(e.target.value)}
                 placeholder="e.g. flatowner@upi"
-                className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-xs font-mono font-bold focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-xs font-mono font-bold focus:outline-none focus:ring-2 focus:ring-emerald-500 disabled:opacity-60"
               />
               <span className="text-[10px] text-slate-400 mt-1 block">
                 This UPI ID is used to auto-generate the upi://pay QR code
@@ -185,10 +201,11 @@ export const SettingsView: React.FC = () => {
               <input
                 type="text"
                 required
+                disabled={!isAdmin}
                 value={payeeName}
                 onChange={(e) => setPayeeName(e.target.value)}
                 placeholder="e.g. Rahul Sharma"
-                className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-xs focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-xs focus:outline-none focus:ring-2 focus:ring-emerald-500 disabled:opacity-60"
               />
             </div>
           </div>
@@ -207,9 +224,10 @@ export const SettingsView: React.FC = () => {
               </label>
               <input
                 type="time"
+                disabled={!isAdmin}
                 value={defaultLunchDeadline}
                 onChange={(e) => setDefaultLunchDeadline(e.target.value)}
-                className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-xs font-bold focus:outline-none"
+                className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-xs font-bold focus:outline-none disabled:opacity-60"
               />
             </div>
 
@@ -219,9 +237,10 @@ export const SettingsView: React.FC = () => {
               </label>
               <input
                 type="time"
+                disabled={!isAdmin}
                 value={defaultDinnerDeadline}
                 onChange={(e) => setDefaultDinnerDeadline(e.target.value)}
-                className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-xs font-bold focus:outline-none"
+                className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-xs font-bold focus:outline-none disabled:opacity-60"
               />
             </div>
           </div>

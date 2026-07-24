@@ -26,6 +26,7 @@ export const MealPollView: React.FC = () => {
     responses,
     settings,
     createPoll,
+    updatePoll,
     togglePollStatus,
     submitMealResponse,
   } = useApp();
@@ -34,8 +35,9 @@ export const MealPollView: React.FC = () => {
     new Date().toISOString().split('T')[0]
   );
 
-  // Admin Poll Create Modal state
+  // Poll Create / Edit Modal state
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [editingPoll, setEditingPoll] = useState<MealPoll | null>(null);
   const [modalType, setModalType] = useState<MealType>('lunch');
   const [modalDesc, setModalDesc] = useState('');
   const [modalDeadline, setModalDeadline] = useState(
@@ -74,15 +76,21 @@ export const MealPollView: React.FC = () => {
 
   const openCreateModal = (type: MealType) => {
     setModalType(type);
-    const existing = type === 'lunch' ? lunchPoll : dinnerPoll;
-    setModalDesc(existing ? existing.description : type === 'lunch' ? 'Paneer + Dal + Rice' : 'Roti + Sabji + Dal');
+    setEditingPoll(null);
+    setModalDesc(type === 'lunch' ? 'Paneer + Dal + Rice' : 'Roti + Sabji + Dal');
     setModalDeadline(
-      existing
-        ? existing.deadline
-        : type === 'lunch'
+      type === 'lunch'
         ? settings.defaultLunchDeadline
         : settings.defaultDinnerDeadline
     );
+    setIsCreateModalOpen(true);
+  };
+
+  const openEditModal = (poll: MealPoll) => {
+    setModalType(poll.type);
+    setEditingPoll(poll);
+    setModalDesc(poll.description);
+    setModalDeadline(poll.deadline);
     setIsCreateModalOpen(true);
   };
 
@@ -90,14 +98,22 @@ export const MealPollView: React.FC = () => {
     e.preventDefault();
     if (!modalDesc.trim()) return;
 
-    createPoll({
-      date: selectedDate,
-      type: modalType,
-      description: modalDesc.trim(),
-      deadline: modalDeadline,
-      isOpen: true,
-      createdBy: currentUser.id,
-    });
+    if (editingPoll) {
+      updatePoll({
+        ...editingPoll,
+        description: modalDesc.trim(),
+        deadline: modalDeadline,
+      });
+    } else {
+      createPoll({
+        date: selectedDate,
+        type: modalType,
+        description: modalDesc.trim(),
+        deadline: modalDeadline,
+        isOpen: true,
+        createdBy: currentUser.id,
+      });
+    }
 
     setIsCreateModalOpen(false);
   };
@@ -110,6 +126,8 @@ export const MealPollView: React.FC = () => {
   ) => {
     const isLunch = type === 'lunch';
     const totalCount = responsesList.reduce((acc, curr) => acc + curr.totalCount, 0);
+    const isVoted = vote !== undefined && vote !== null;
+    const isLockedForMember = currentUser.role !== 'admin' && isVoted;
 
     return (
       <div
@@ -145,7 +163,7 @@ export const MealPollView: React.FC = () => {
               </div>
             </div>
 
-            {/* Poll Open/Closed Badge & Admin Toggle */}
+            {/* Poll Open/Closed Badge & Admin Controls */}
             <div className="flex items-center gap-2">
               {poll ? (
                 <span
@@ -172,13 +190,22 @@ export const MealPollView: React.FC = () => {
               )}
 
               {currentUser.role === 'admin' && poll && (
-                <button
-                  onClick={() => togglePollStatus(poll.id)}
-                  className="p-1.5 rounded-xl border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 transition-colors"
-                  title={poll.isOpen ? 'Lock Poll' : 'Unlock Poll'}
-                >
-                  {poll.isOpen ? <Lock className="w-4 h-4 text-rose-500" /> : <Unlock className="w-4 h-4 text-emerald-500" />}
-                </button>
+                <div className="flex items-center gap-1">
+                  <button
+                    onClick={() => openEditModal(poll)}
+                    className="p-1.5 rounded-xl border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 transition-colors flex items-center gap-1 text-xs font-bold px-2.5"
+                    title="Edit Poll Details"
+                  >
+                    <Edit2 className="w-3.5 h-3.5 text-indigo-500" /> Edit
+                  </button>
+                  <button
+                    onClick={() => togglePollStatus(poll.id)}
+                    className="p-1.5 rounded-xl border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 transition-colors"
+                    title={poll.isOpen ? 'Lock Poll' : 'Unlock Poll'}
+                  >
+                    {poll.isOpen ? <Lock className="w-4 h-4 text-rose-500" /> : <Unlock className="w-4 h-4 text-emerald-500" />}
+                  </button>
+                </div>
               )}
             </div>
           </div>
@@ -198,14 +225,12 @@ export const MealPollView: React.FC = () => {
               <p className="text-xs text-slate-500 dark:text-slate-400 mb-3">
                 No menu poll has been posted for today's {type} yet.
               </p>
-              {currentUser.role === 'admin' && (
-                <button
-                  onClick={() => openCreateModal(type)}
-                  className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs shadow-md shadow-indigo-200 dark:shadow-none transition-all inline-flex items-center gap-1.5 uppercase tracking-wider"
-                >
-                  <PlusCircle className="w-4 h-4" /> Create {type} Poll
-                </button>
-              )}
+              <button
+                onClick={() => openCreateModal(type)}
+                className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs shadow-md shadow-indigo-200 dark:shadow-none transition-all inline-flex items-center gap-1.5 uppercase tracking-wider"
+              >
+                <PlusCircle className="w-4 h-4" /> Create {type} Poll
+              </button>
             </div>
           )}
 
@@ -230,7 +255,7 @@ export const MealPollView: React.FC = () => {
                   return (
                     <button
                       key={`poll-vote-${type}-${qty}`}
-                      disabled={!poll.isOpen}
+                      disabled={!poll.isOpen || isLockedForMember}
                       onClick={() => handleVote(poll, type, qty, vote?.guestCount || 0)}
                       className={`py-2.5 px-2 rounded-2xl border text-xs font-extrabold transition-all flex flex-col items-center justify-center gap-0.5 ${
                         isSelected
@@ -258,7 +283,7 @@ export const MealPollView: React.FC = () => {
                 </div>
                 <div className="flex items-center gap-2">
                   <button
-                    disabled={!poll.isOpen || (vote?.guestCount || 0) <= 0}
+                    disabled={!poll.isOpen || isLockedForMember || (vote?.guestCount || 0) <= 0}
                     onClick={() =>
                       handleVote(
                         poll,
@@ -275,7 +300,7 @@ export const MealPollView: React.FC = () => {
                     {vote?.guestCount || 0}
                   </span>
                   <button
-                    disabled={!poll.isOpen}
+                    disabled={!poll.isOpen || isLockedForMember}
                     onClick={() =>
                       handleVote(poll, type, vote?.quantity || 0, (vote?.guestCount || 0) + 1)
                     }
@@ -285,6 +310,14 @@ export const MealPollView: React.FC = () => {
                   </button>
                 </div>
               </div>
+
+              {/* Locked response notice for member */}
+              {isVoted && currentUser.role !== 'admin' && (
+                <p className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-800/80 p-2.5 rounded-xl flex items-center justify-center gap-1.5 mt-2">
+                  <Lock className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+                  Your vote is recorded and locked. Only Flat Admin can edit responses.
+                </p>
+              )}
             </div>
           )}
         </div>
@@ -357,14 +390,14 @@ export const MealPollView: React.FC = () => {
         {renderPollCard('dinner', dinnerPoll, myDinnerVote, dinnerResponses)}
       </div>
 
-      {/* Admin Create/Edit Poll Modal */}
+      {/* Create / Edit Poll Modal */}
       {isCreateModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
           <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl max-w-md w-full p-6 shadow-2xl relative">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-bold font-heading text-slate-900 dark:text-white flex items-center gap-2 capitalize">
                 {modalType === 'lunch' ? <Sun className="w-5 h-5 text-amber-500" /> : <Moon className="w-5 h-5 text-indigo-500" />}
-                Create {modalType} Poll for {selectedDate}
+                {editingPoll ? 'Edit' : 'Create'} {modalType} Poll for {selectedDate}
               </h3>
               <button
                 onClick={() => setIsCreateModalOpen(false)}
@@ -414,7 +447,7 @@ export const MealPollView: React.FC = () => {
                   type="submit"
                   className="flex-1 py-2.5 text-xs font-bold rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white shadow-md transition-colors"
                 >
-                  Publish Poll
+                  {editingPoll ? 'Save Changes' : 'Publish Poll'}
                 </button>
               </div>
             </form>
