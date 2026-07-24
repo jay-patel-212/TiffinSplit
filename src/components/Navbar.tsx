@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
-import { Menu, Moon, Sun, Shield, UserCheck, Utensils, QrCode } from 'lucide-react';
+import { Menu, Moon, Sun, Shield, UserCheck, Utensils, QrCode, LogOut } from 'lucide-react';
 import { AuthModal } from './AuthModal';
 
 interface NavbarProps {
@@ -8,7 +8,7 @@ interface NavbarProps {
 }
 
 export const Navbar: React.FC<NavbarProps> = ({ onOpenMobileSidebar }) => {
-  const { currentUser, settings, isDarkMode, toggleDarkMode, setActiveTab } = useApp();
+  const { currentUser, settings, isDarkMode, toggleDarkMode, setActiveTab, logout, firebaseUser } = useApp();
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
 
   return (
@@ -43,7 +43,7 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenMobileSidebar }) => {
             </div>
           </div>
 
-          {/* Right section: Quick Actions, Theme Toggle, Current User Profile Switcher */}
+          {/* Right section: Quick Actions, Theme Toggle, Current User Profile & Logout */}
           <div className="flex items-center gap-2 sm:gap-3">
             <button
               onClick={() => setActiveTab('payments')}
@@ -62,7 +62,7 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenMobileSidebar }) => {
 
             <div className="h-6 w-px bg-slate-200 dark:bg-slate-800 mx-0.5" />
 
-            {/* Current User Switch Button */}
+            {/* Current User Profile Pill */}
             <button
               onClick={() => setIsAuthModalOpen(true)}
               className="flex items-center gap-2 p-1.5 sm:px-3 sm:py-1.5 rounded-xl bg-slate-100 dark:bg-slate-800/80 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 border border-slate-200 dark:border-slate-700 transition-all group"
@@ -82,11 +82,20 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenMobileSidebar }) => {
                     <Shield className="w-3 h-3 text-amber-500 inline shrink-0" />
                   )}
                 </div>
-                <div className="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5 capitalize">
-                  {currentUser.role}
+                <div className="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5 capitalize truncate max-w-[100px]">
+                  {firebaseUser?.email || currentUser.role}
                 </div>
               </div>
               <UserCheck className="w-3.5 h-3.5 text-slate-400 group-hover:text-emerald-500 transition-colors ml-0.5" />
+            </button>
+
+            {/* Logout Button */}
+            <button
+              onClick={logout}
+              className="p-2.5 text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/50 rounded-xl transition-colors border border-rose-200 dark:border-rose-900/60"
+              title="Log Out of Firebase Account"
+            >
+              <LogOut className="w-4 h-4" />
             </button>
           </div>
         </div>

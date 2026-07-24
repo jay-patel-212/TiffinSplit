@@ -1,0 +1,11 @@
+{
+  "projectId": "tiffin-split",
+  "appId": "1:233181210866:web:802ba0a33768e39783c86b",
+  "apiKey": "AIzaSyAJnNzgbQ6Ja8PfHKDLVnkTX0TlELTb0aw",
+  "authDomain": "tiffin-split.firebaseapp.com",
+  "databaseURL": "https://tiffin-split-default-rtdb.asia-southeast1.firebasedatabase.app/",
+  "firestoreDatabaseId": "(default)",
+  "storageBucket": "tiffin-split.firebasestorage.app",
+  "messagingSenderId": "233181210866",
+  "measurementId": "G-W4874DW4Y0"
+}

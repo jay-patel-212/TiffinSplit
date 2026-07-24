@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
+import { sendFirebaseInviteEmail } from '../services/firebase';
 import { X, UserCheck, Shield, UserPlus, Check, Sparkles } from 'lucide-react';
 import { User, Role } from '../types';
 
@@ -9,7 +10,7 @@ interface AuthModalProps {
 }
 
 export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
-  const { currentUser, users, setCurrentUser, addUser } = useApp();
+  const { currentUser, users, setCurrentUser, addUser, showToast } = useApp();
   const [isAddingNew, setIsAddingNew] = useState(false);
   const [newName, setNewName] = useState('');
   const [newEmail, setNewEmail] = useState('');
@@ -23,18 +24,29 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
     onClose();
   };
 
-  const handleAddSubmit = (e: React.FormEvent) => {
+  const handleAddSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newName.trim() || !newEmail.trim()) return;
 
+    const email = newEmail.trim();
+    const name = newName.trim();
+
     addUser({
-      name: newName.trim(),
-      email: newEmail.trim(),
+      name,
+      email,
       phone: newPhone.trim() || undefined,
       role: newRole,
       active: true,
-      avatarUrl: `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(newName)}`,
+      avatarUrl: `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(name)}`,
     });
+
+    showToast(`Added ${name}! Sending Firebase invite email...`, 'info');
+    const res = await sendFirebaseInviteEmail(email, name);
+    if (res.success) {
+      showToast(res.message, 'success');
+    } else {
+      showToast(res.message, 'warning');
+    }
 
     setNewName('');
     setNewEmail('');

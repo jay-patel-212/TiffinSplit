@@ -60,7 +60,8 @@ export const DashboardView: React.FC = () => {
   const handleQuickVote = (type: 'lunch' | 'dinner', qty: number) => {
     const targetPoll = type === 'lunch' ? lunchPoll : dinnerPoll;
     if (!targetPoll) {
-      showToast(`No poll created for today's ${type}`, 'error');
+      showToast(`No poll created for today's ${type}. Creating poll now...`, 'info');
+      setActiveTab('polls');
       return;
     }
     const currentGuest = type === 'lunch' ? (myLunchVote?.guestCount || 0) : (myDinnerVote?.guestCount || 0);

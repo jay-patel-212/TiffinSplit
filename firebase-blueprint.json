@@ -1,0 +1,81 @@
+{
+  "entities": {
+    "users": {
+      "title": "users",
+      "description": "User profiles",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "email": { "type": "string text-email" },
+        "phone": { "type": "string" },
+        "role": { "type": "string" },
+        "active": { "type": "boolean" },
+        "avatarUrl": { "type": "string text-url" }
+      },
+      "required": ["id", "name", "email"]
+    },
+    "polls": {
+      "title": "polls",
+      "description": "Meal polls created by admin or members",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "date": { "type": "string" },
+        "type": { "type": "string" },
+        "menuItems": { "type": "string" },
+        "status": { "type": "string" },
+        "createdById": { "type": "string" },
+        "createdAt": { "type": "string text-datetime" }
+      },
+      "required": ["id", "date", "type"]
+    },
+    "responses": {
+      "title": "responses",
+      "description": "Meal poll votes and responses by flatmates",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "pollId": { "type": "string" },
+        "userId": { "type": "string" },
+        "date": { "type": "string" },
+        "mealType": { "type": "string" },
+        "optingIn": { "type": "boolean" },
+        "count": { "type": "number" },
+        "guestCount": { "type": "number" },
+        "totalCount": { "type": "number" },
+        "notes": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["id", "pollId", "userId"]
+    },
+    "bills": {
+      "title": "bills",
+      "description": "Monthly split bills and payment tracking",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "month": { "type": "string" },
+        "totalAmount": { "type": "number" },
+        "costPerMeal": { "type": "number" },
+        "totalMeals": { "type": "number" },
+        "status": { "type": "string" },
+        "createdById": { "type": "string" },
+        "userBreakdown": { "type": "array" }
+      },
+      "required": ["id", "month", "totalAmount"]
+    },
+    "settings": {
+      "title": "settings",
+      "description": "Flat configuration settings",
+      "type": "object",
+      "properties": {
+        "flatName": { "type": "string" },
+        "upiId": { "type": "string" },
+        "perMealRate": { "type": "number" },
+        "lunchCutoff": { "type": "string" },
+        "dinnerCutoff": { "type": "string" }
+      }
+    }
+  }
+}

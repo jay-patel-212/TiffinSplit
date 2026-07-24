@@ -28,13 +28,22 @@ const getPreviousMonthString = (): string => {
 
 const INITIAL_USERS: User[] = [
   {
-    id: 'u-1',
-    name: 'Rahul Sharma',
-    email: 'rahul.admin@flat302.com',
+    id: 'u-jay',
+    name: 'Jay Patel',
+    email: 'jay.patel.mantratec@gmail.com',
     phone: '+91 98765 43210',
     role: 'admin',
     active: true,
     avatarUrl: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150&auto=format&fit=crop&q=80',
+  },
+  {
+    id: 'u-1',
+    name: 'Rahul Sharma',
+    email: 'rahul.admin@flat302.com',
+    phone: '+91 98765 43210',
+    role: 'member',
+    active: true,
+    avatarUrl: 'https://images.unsplash.com/photo-1570295999919-56ceb5ecca61?w=150&auto=format&fit=crop&q=80',
   },
   {
     id: 'u-2',
@@ -83,6 +92,14 @@ const INITIAL_SETTINGS: FlatSettings = {
   defaultDinnerDeadline: '18:00',
   tiffinProviderName: 'Annapurna Gourmet Tiffin Service',
   tiffinProviderPhone: '+91 98000 11223',
+  firebaseConfig: {
+    apiKey: "AIzaSyAJnNzgbQ6Ja8PfHKDLVnkTX0TlELTb0aw",
+    authDomain: "tiffin-split.firebaseapp.com",
+    projectId: "tiffin-split",
+    storageBucket: "tiffin-split.firebasestorage.app",
+    messagingSenderId: "Y233181210866",
+    appId: "1:233181210866:web:802ba0a33768e39783c86b",
+  },
 };
 
 const today = getTodayString();
@@ -255,14 +272,17 @@ export class LocalStorageManager {
 
   static getPolls(): MealPoll[] {
     const data = localStorage.getItem(STORAGE_KEYS.POLLS);
-    if (!data) {
+    if (data === null) {
+      if (localStorage.getItem('flat_meal_cleared') === 'true') {
+        return [];
+      }
       this.setPolls(INITIAL_POLLS);
       return INITIAL_POLLS;
     }
     try {
       return JSON.parse(data);
     } catch {
-      return INITIAL_POLLS;
+      return [];
     }
   }
 
@@ -272,14 +292,17 @@ export class LocalStorageManager {
 
   static getResponses(): MealResponse[] {
     const data = localStorage.getItem(STORAGE_KEYS.RESPONSES);
-    if (!data) {
+    if (data === null) {
+      if (localStorage.getItem('flat_meal_cleared') === 'true') {
+        return [];
+      }
       this.setResponses(INITIAL_RESPONSES);
       return INITIAL_RESPONSES;
     }
     try {
       return JSON.parse(data);
     } catch {
-      return INITIAL_RESPONSES;
+      return [];
     }
   }
 
@@ -289,19 +312,29 @@ export class LocalStorageManager {
 
   static getBills(): MonthlyBill[] {
     const data = localStorage.getItem(STORAGE_KEYS.BILLS);
-    if (!data) {
+    if (data === null) {
+      if (localStorage.getItem('flat_meal_cleared') === 'true') {
+        return [];
+      }
       this.setBills(INITIAL_BILLS);
       return INITIAL_BILLS;
     }
     try {
       return JSON.parse(data);
     } catch {
-      return INITIAL_BILLS;
+      return [];
     }
   }
 
   static setBills(bills: MonthlyBill[]): void {
     localStorage.setItem(STORAGE_KEYS.BILLS, JSON.stringify(bills));
+  }
+
+  static clearDemoData(): void {
+    localStorage.setItem(STORAGE_KEYS.POLLS, JSON.stringify([]));
+    localStorage.setItem(STORAGE_KEYS.RESPONSES, JSON.stringify([]));
+    localStorage.setItem(STORAGE_KEYS.BILLS, JSON.stringify([]));
+    localStorage.setItem('flat_meal_cleared', 'true');
   }
 
   static getSettings(): FlatSettings {

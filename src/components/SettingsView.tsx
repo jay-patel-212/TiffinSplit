@@ -13,11 +13,15 @@ import {
   Clock,
   Utensils,
   Smartphone,
+  Trash2,
+  AlertTriangle,
+  RotateCcw,
 } from 'lucide-react';
 import { FlatSettings } from '../types';
 
 export const SettingsView: React.FC = () => {
-  const { settings, updateSettings, isDarkMode, toggleDarkMode, currentUser } = useApp();
+  const { settings, updateSettings, clearDemoData, isDarkMode, toggleDarkMode, currentUser } = useApp();
+  const [confirmClearOpen, setConfirmClearOpen] = useState(false);
 
   const [flatName, setFlatName] = useState(settings.flatName);
   const [upiId, setUpiId] = useState(settings.upiId);
@@ -278,6 +282,61 @@ export const SettingsView: React.FC = () => {
               />
             </div>
           </div>
+        </div>
+
+        {/* Data Reset & Dynamic Mode Section */}
+        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 shadow-sm space-y-4">
+          <div className="flex items-center justify-between">
+            <h3 className="font-extrabold font-heading text-base text-slate-900 dark:text-white flex items-center gap-2">
+              <Trash2 className="w-5 h-5 text-rose-500" /> Data Management & Clear Previous Demo Data
+            </h3>
+            <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300">
+              Admin Control
+            </span>
+          </div>
+
+          <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
+            Want a fresh, 100% dynamic dashboard? Click below to clear all sample demo meal polls, votes, and historical bills. Your flat settings and user profile will remain intact so you can start logging real daily tiffins.
+          </p>
+
+          {!confirmClearOpen ? (
+            <button
+              type="button"
+              onClick={() => setConfirmClearOpen(true)}
+              className="px-4 py-2.5 rounded-2xl bg-rose-50 dark:bg-rose-950/60 hover:bg-rose-100 dark:hover:bg-rose-900/80 text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-900/80 text-xs font-bold transition-all inline-flex items-center gap-2"
+            >
+              <RotateCcw className="w-4 h-4" />
+              Clear All Previous Demo Polls & Bills
+            </button>
+          ) : (
+            <div className="p-4 rounded-2xl bg-rose-50 dark:bg-rose-950/80 border border-rose-300 dark:border-rose-800 space-y-3 animate-in fade-in">
+              <div className="flex items-start gap-2.5 text-rose-800 dark:text-rose-200 text-xs font-semibold">
+                <AlertTriangle className="w-5 h-5 text-rose-600 shrink-0 mt-0.5" />
+                <span>
+                  Are you sure you want to clear all previous polls, responses, and monthly bills? This will reset the dashboard to a completely clean, dynamic state.
+                </span>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    clearDemoData();
+                    setConfirmClearOpen(false);
+                  }}
+                  className="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold transition-colors"
+                >
+                  Yes, Clear All Data
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setConfirmClearOpen(false)}
+                  className="px-4 py-2 rounded-xl bg-slate-200 dark:bg-slate-800 hover:bg-slate-300 text-slate-800 dark:text-slate-200 text-xs font-bold transition-colors"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       </form>
     </div>

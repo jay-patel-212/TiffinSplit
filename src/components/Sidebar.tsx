@@ -14,6 +14,7 @@ import {
   X,
   Shield,
   Sparkles,
+  LogOut,
 } from 'lucide-react';
 
 interface SidebarProps {
@@ -22,7 +23,7 @@ interface SidebarProps {
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({ mobileOpen, onCloseMobile }) => {
-  const { activeTab, setActiveTab, currentUser, settings } = useApp();
+  const { activeTab, setActiveTab, currentUser, settings, logout, firebaseUser } = useApp();
 
   const navItems: { id: ActiveTab; label: string; icon: React.FC<{ className?: string }>; adminOnly?: boolean }[] = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
@@ -52,7 +53,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ mobileOpen, onCloseMobile }) =
               `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(currentUser.name)}`
             }
             alt={currentUser.name}
-            className="w-9 h-9 rounded-full object-cover border-2 border-indigo-500/30"
+            className="w-9 h-9 rounded-full object-cover border-2 border-indigo-500/30 shrink-0"
           />
           <div className="flex-1 min-w-0">
             <div className="text-xs font-bold text-slate-900 dark:text-white truncate">
@@ -108,14 +109,15 @@ export const Sidebar: React.FC<SidebarProps> = ({ mobileOpen, onCloseMobile }) =
         })}
       </nav>
 
-      {/* GitHub Pages & Firebase Sync Card */}
-      <div className="mt-4 p-3 rounded-2xl bg-indigo-50/80 dark:bg-indigo-950/40 border border-indigo-200/80 dark:border-indigo-800/60 text-xs">
-        <div className="flex items-center gap-2 font-bold text-indigo-900 dark:text-indigo-300 mb-1">
-          <Sparkles className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" /> GitHub Pages Ready
-        </div>
-        <p className="text-[11px] text-indigo-700/90 dark:text-indigo-300/90 leading-relaxed">
-          Full client-side mode enabled. Add Firebase keys in Settings to sync with Firestore live!
-        </p>
+      {/* Logout Action Button */}
+      <div className="mt-3 pt-3 border-t border-slate-200 dark:border-slate-800 space-y-2">
+        <button
+          onClick={logout}
+          className="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-bold text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 border border-transparent hover:border-rose-200 dark:hover:border-rose-900 transition-all"
+        >
+          <LogOut className="w-4 h-4" />
+          <span>Log Out ({firebaseUser?.email || 'Firebase'})</span>
+        </button>
       </div>
     </div>
   );

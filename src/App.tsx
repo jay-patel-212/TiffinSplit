@@ -12,11 +12,38 @@ import { PaymentsView } from './components/PaymentsView';
 import { ReportsView } from './components/ReportsView';
 import { SettingsView } from './components/SettingsView';
 import { ProfileView } from './components/ProfileView';
+import { LoginView } from './components/LoginView';
 import { ToastContainer } from './components/Toast';
+import { ShieldCheck, RefreshCw } from 'lucide-react';
 
 const AppContent: React.FC = () => {
-  const { activeTab } = useApp();
+  const { activeTab, firebaseUser, authLoading } = useApp();
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
+
+  if (authLoading) {
+    return (
+      <div className="min-h-screen bg-slate-900 text-white flex flex-col items-center justify-center p-4">
+        <div className="flex flex-col items-center gap-3">
+          <div className="w-12 h-12 rounded-2xl bg-indigo-600 flex items-center justify-center text-white shadow-lg animate-bounce">
+            <ShieldCheck className="w-7 h-7" />
+          </div>
+          <p className="text-sm font-bold text-slate-300 flex items-center gap-2">
+            <RefreshCw className="w-4 h-4 animate-spin text-indigo-400" />
+            Authenticating TiffinSplit account...
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!firebaseUser) {
+    return (
+      <>
+        <LoginView />
+        <ToastContainer />
+      </>
+    );
+  }
 
   const renderActiveView = () => {
     switch (activeTab) {

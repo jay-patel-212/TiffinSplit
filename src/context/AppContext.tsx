@@ -1,6 +1,23 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { User, MealPoll, MealResponse, MonthlyBill, FlatSettings, MealType } from '../types';
 import { LocalStorageManager } from '../services/storage';
+import {
+  auth,
+  db,
+  rtdb,
+  ref,
+  set as setRtdb,
+  onValue,
+  remove as removeRtdb,
+  collection,
+  doc,
+  setDoc,
+  deleteDoc,
+  onSnapshot,
+  onAuthStateChanged,
+  firebaseSignOut,
+  FirebaseUser,
+} from '../services/firebase';
 
 export type ActiveTab =
   | 'dashboard'
@@ -29,6 +46,9 @@ interface AppContextType {
   activeTab: ActiveTab;
   isDarkMode: boolean;
   toasts: Toast[];
+  firebaseUser: FirebaseUser | null;
+  authLoading: boolean;
+  logout: () => Promise<void>;
   setActiveTab: (tab: ActiveTab) => void;
   setCurrentUser: (user: User) => void;
   toggleDarkMode: () => void;
@@ -48,11 +68,31 @@ interface AppContextType {
   markPaymentStatus: (billId: string, userId: string, paid: boolean, transactionId?: string) => void;
   // Settings Operations
   updateSettings: (newSettings: FlatSettings) => void;
+  clearDemoData: () => void;
+  loginDirectly: (user: User) => void;
   // Helper
   getTodayResponses: () => MealResponse[];
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
+
+// Utility to remove undefined fields recursively so Firestore setDoc does not throw errors
+function sanitizeForFirebase<T>(data: T): T {
+  if (data === null || data === undefined) return data;
+  if (typeof data !== 'object') return data;
+
+  if (Array.isArray(data)) {
+    return data.map((item) => sanitizeForFirebase(item)) as unknown as T;
+  }
+
+  const cleanObj: Record<string, any> = {};
+  for (const [key, val] of Object.entries(data)) {
+    if (val !== undefined) {
+      cleanObj[key] = sanitizeForFirebase(val);
+    }
+  }
+  return cleanObj as T;
+}
 
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [currentUser, setCurrentUser] = useState<User>(() => LocalStorageManager.getCurrentUser());
@@ -66,6 +106,94 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return localStorage.getItem('flat_meal_theme') === 'dark';
   });
   const [toasts, setToasts] = useState<Toast[]>([]);
+  const [firebaseUser, setFirebaseUser] = useState<FirebaseUser | null>(null);
+  const [authLoading, setAuthLoading] = useState<boolean>(true);
+
+  // Subscribe to Firebase Auth state
+  useEffect(() => {
+    if (!auth) {
+      setAuthLoading(false);
+      return;
+    }
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      setFirebaseUser(user);
+      setAuthLoading(false);
+
+      if (user && user.email) {
+        const normalizedEmail = user.email.toLowerCase();
+        const isAdminEmail = normalizedEmail === 'jay.patel.mantratec@gmail.com';
+
+        // Sync logged-in Firebase user with local flatmate user profile if found
+        const existingUsers = LocalStorageManager.getUsers();
+        const matchedIndex = existingUsers.findIndex(
+          (u) => u.email.toLowerCase() === normalizedEmail
+        );
+
+        if (matchedIndex !== -1) {
+          const matched = { ...existingUsers[matchedIndex] };
+          if (isAdminEmail) {
+            matched.role = 'admin';
+          }
+          if (user.displayName && matched.name !== user.displayName) {
+            matched.name = user.displayName;
+          }
+          existingUsers[matchedIndex] = matched;
+          setUsers(existingUsers);
+          LocalStorageManager.setUsers(existingUsers);
+
+          setCurrentUser(matched);
+          LocalStorageManager.setCurrentUser(matched);
+        } else {
+          // Create or set a dynamic user for this Firebase email
+          const newUser: User = {
+            id: user.uid,
+            name: user.displayName || user.email.split('@')[0] || 'Flatmate',
+            email: user.email,
+            role: isAdminEmail ? 'admin' : 'member',
+            active: true,
+            avatarUrl: user.photoURL || `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(user.email)}`,
+          };
+          setCurrentUser(newUser);
+          LocalStorageManager.setCurrentUser(newUser);
+
+          // Add to flatmate list if not present
+          if (!existingUsers.some((u) => u.id === newUser.id)) {
+            const updated = [newUser, ...existingUsers];
+            setUsers(updated);
+            LocalStorageManager.setUsers(updated);
+          }
+        }
+      }
+    });
+
+    return () => unsubscribe();
+  }, []);
+
+  const loginDirectly = (user: User) => {
+    const dummyFirebaseUser = {
+      uid: user.id,
+      email: user.email,
+      displayName: user.name,
+      photoURL: user.avatarUrl,
+    } as FirebaseUser;
+    setFirebaseUser(dummyFirebaseUser);
+    setCurrentUser(user);
+    LocalStorageManager.setCurrentUser(user);
+    showToast(`Signed in directly as ${user.name} (${user.role.toUpperCase()})`, 'success');
+  };
+
+  const logout = async () => {
+    try {
+      if (auth) {
+        await firebaseSignOut(auth);
+      }
+      setFirebaseUser(null);
+      showToast('Successfully logged out of TiffinSplit', 'info');
+    } catch (err) {
+      console.error('Error logging out:', err);
+      showToast('Failed to log out', 'error');
+    }
+  };
 
   // Apply dark class to document html element
   useEffect(() => {
@@ -95,11 +223,151 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     showToast(`Switched account to ${user.name}`, 'info');
   };
 
+  // Subscribe to Realtime Database (or Firestore as fallback) for live multi-user sync
+  useEffect(() => {
+    let unsubUsers = () => {};
+    let unsubPolls = () => {};
+    let unsubResponses = () => {};
+    let unsubBills = () => {};
+    let unsubSettings = () => {};
+
+    if (rtdb) {
+      // Primary: Realtime Database subscriptions
+      unsubUsers = onValue(
+        ref(rtdb, 'users'),
+        (snapshot) => {
+          const val = snapshot.val();
+          const list = val ? (Object.values(val) as User[]) : [];
+          setUsers(list);
+          LocalStorageManager.setUsers(list);
+        },
+        (err) => console.log('RTDB users sync error:', err)
+      );
+
+      unsubPolls = onValue(
+        ref(rtdb, 'polls'),
+        (snapshot) => {
+          const val = snapshot.val();
+          const list = val ? (Object.values(val) as MealPoll[]) : [];
+          setPolls(list);
+          LocalStorageManager.setPolls(list);
+        },
+        (err) => console.log('RTDB polls sync error:', err)
+      );
+
+      unsubResponses = onValue(
+        ref(rtdb, 'responses'),
+        (snapshot) => {
+          const val = snapshot.val();
+          const list = val ? (Object.values(val) as MealResponse[]) : [];
+          setResponses(list);
+          LocalStorageManager.setResponses(list);
+        },
+        (err) => console.log('RTDB responses sync error:', err)
+      );
+
+      unsubBills = onValue(
+        ref(rtdb, 'bills'),
+        (snapshot) => {
+          const val = snapshot.val();
+          const list = val ? (Object.values(val) as MonthlyBill[]) : [];
+          setBills(list);
+          LocalStorageManager.setBills(list);
+        },
+        (err) => console.log('RTDB bills sync error:', err)
+      );
+
+      unsubSettings = onValue(
+        ref(rtdb, 'settings/config'),
+        (snapshot) => {
+          const val = snapshot.val();
+          if (val) {
+            setSettings(val as FlatSettings);
+            LocalStorageManager.setSettings(val as FlatSettings);
+          }
+        },
+        (err) => console.log('RTDB settings sync error:', err)
+      );
+    } else if (db) {
+      // Fallback: Firestore subscriptions
+      unsubUsers = onSnapshot(
+        collection(db, 'users'),
+        (snapshot) => {
+          const firestoreUsers = snapshot.docs.map((doc) => doc.data() as User);
+          setUsers(firestoreUsers);
+          LocalStorageManager.setUsers(firestoreUsers);
+        },
+        (err) => console.log('Firestore users sync error:', err)
+      );
+
+      unsubPolls = onSnapshot(
+        collection(db, 'polls'),
+        (snapshot) => {
+          const firestorePolls = snapshot.docs.map((doc) => doc.data() as MealPoll);
+          setPolls(firestorePolls);
+          LocalStorageManager.setPolls(firestorePolls);
+        },
+        (err) => console.log('Firestore polls sync error:', err)
+      );
+
+      unsubResponses = onSnapshot(
+        collection(db, 'responses'),
+        (snapshot) => {
+          const firestoreResponses = snapshot.docs.map((doc) => doc.data() as MealResponse);
+          setResponses(firestoreResponses);
+          LocalStorageManager.setResponses(firestoreResponses);
+        },
+        (err) => console.log('Firestore responses sync error:', err)
+      );
+
+      unsubBills = onSnapshot(
+        collection(db, 'bills'),
+        (snapshot) => {
+          const firestoreBills = snapshot.docs.map((doc) => doc.data() as MonthlyBill);
+          setBills(firestoreBills);
+          LocalStorageManager.setBills(firestoreBills);
+        },
+        (err) => console.log('Firestore bills sync error:', err)
+      );
+
+      unsubSettings = onSnapshot(
+        collection(db, 'settings'),
+        (snapshot) => {
+          if (!snapshot.empty) {
+            const docData = snapshot.docs[0].data() as FlatSettings;
+            setSettings(docData);
+            LocalStorageManager.setSettings(docData);
+          }
+        },
+        (err) => console.log('Firestore settings sync error:', err)
+      );
+    }
+
+    return () => {
+      unsubUsers();
+      unsubPolls();
+      unsubResponses();
+      unsubBills();
+      unsubSettings();
+    };
+  }, []);
+
   const addUser = (user: Omit<User, 'id'>) => {
     const newUser: User = { ...user, id: `u-${Date.now()}` };
     const updated = [...users, newUser];
     setUsers(updated);
     LocalStorageManager.setUsers(updated);
+    const sanitized = sanitizeForFirebase(newUser);
+    if (db) {
+      setDoc(doc(db, 'users', newUser.id), sanitized).catch((err) =>
+        console.error('Firestore addUser error:', err)
+      );
+    }
+    if (rtdb) {
+      setRtdb(ref(rtdb, `users/${newUser.id}`), sanitized).catch((err) =>
+        console.error('RTDB addUser error:', err)
+      );
+    }
     showToast(`Added member ${newUser.name}`, 'success');
   };
 
@@ -110,6 +378,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (currentUser.id === user.id) {
       setCurrentUser(user);
       LocalStorageManager.setCurrentUser(user);
+    }
+    const sanitized = sanitizeForFirebase(user);
+    if (db) {
+      setDoc(doc(db, 'users', user.id), sanitized).catch((err) =>
+        console.error('Firestore updateUser error:', err)
+      );
+    }
+    if (rtdb) {
+      setRtdb(ref(rtdb, `users/${user.id}`), sanitized).catch((err) =>
+        console.error('RTDB updateUser error:', err)
+      );
     }
     showToast(`Updated ${user.name}`, 'success');
   };
@@ -123,7 +402,23 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const updated = users.filter((u) => u.id !== id);
     setUsers(updated);
     LocalStorageManager.setUsers(updated);
-    showToast(`Removed member`, 'info');
+
+    if (currentUser?.id === id && updated.length > 0) {
+      setCurrentUser(updated[0]);
+      LocalStorageManager.setCurrentUser(updated[0]);
+    }
+
+    if (db) {
+      deleteDoc(doc(db, 'users', id)).catch((err) =>
+        console.error('Firestore deleteUser error:', err)
+      );
+    }
+    if (rtdb) {
+      removeRtdb(ref(rtdb, `users/${id}`)).catch((err) =>
+        console.error('RTDB deleteUser error:', err)
+      );
+    }
+    showToast(`Removed member ${target?.name || ''}`, 'info');
   };
 
   const createPoll = (pollData: Omit<MealPoll, 'id'>) => {
@@ -134,6 +429,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const updated = [newPoll, ...polls];
     setPolls(updated);
     LocalStorageManager.setPolls(updated);
+    const sanitized = sanitizeForFirebase(newPoll);
+    if (db) {
+      setDoc(doc(db, 'polls', newPoll.id), sanitized).catch((err) =>
+        console.error('Firestore createPoll error:', err)
+      );
+    }
+    if (rtdb) {
+      setRtdb(ref(rtdb, `polls/${newPoll.id}`), sanitized).catch((err) =>
+        console.error('RTDB createPoll error:', err)
+      );
+    }
     showToast(`Created ${pollData.type.toUpperCase()} poll for ${pollData.date}`, 'success');
   };
 
@@ -141,6 +447,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const updated = polls.map((p) => (p.id === poll.id ? poll : p));
     setPolls(updated);
     LocalStorageManager.setPolls(updated);
+    const sanitized = sanitizeForFirebase(poll);
+    if (db) {
+      setDoc(doc(db, 'polls', poll.id), sanitized).catch((err) =>
+        console.error('Firestore updatePoll error:', err)
+      );
+    }
+    if (rtdb) {
+      setRtdb(ref(rtdb, `polls/${poll.id}`), sanitized).catch((err) =>
+        console.error('RTDB updatePoll error:', err)
+      );
+    }
     showToast(`Poll updated`, 'success');
   };
 
@@ -149,6 +466,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setPolls(updated);
     LocalStorageManager.setPolls(updated);
     const target = updated.find((p) => p.id === id);
+    if (target) {
+      const sanitized = sanitizeForFirebase(target);
+      if (db) {
+        setDoc(doc(db, 'polls', target.id), sanitized).catch((err) =>
+          console.error('Firestore togglePollStatus error:', err)
+        );
+      }
+      if (rtdb) {
+        setRtdb(ref(rtdb, `polls/${target.id}`), sanitized).catch((err) =>
+          console.error('RTDB togglePollStatus error:', err)
+        );
+      }
+    }
     showToast(`Poll marked as ${target?.isOpen ? 'OPEN' : 'CLOSED'}`, 'info');
   };
 
@@ -185,6 +515,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     setResponses(updatedResponses);
     LocalStorageManager.setResponses(updatedResponses);
+    const sanitized = sanitizeForFirebase(responsePayload);
+    if (db) {
+      setDoc(doc(db, 'responses', responsePayload.id), sanitized).catch((err) =>
+        console.error('Firestore submitMealResponse error:', err)
+      );
+    }
+    if (rtdb) {
+      setRtdb(ref(rtdb, `responses/${responsePayload.id}`), sanitized).catch((err) =>
+        console.error('RTDB submitMealResponse error:', err)
+      );
+    }
 
     const actionText = totalCount > 0 ? `Voted ${totalCount} tiffin(s) for ${type}` : `Opted OUT for ${type}`;
     showToast(actionText, 'success');
@@ -251,6 +592,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     setBills(updatedBills);
     LocalStorageManager.setBills(updatedBills);
+    const sanitized = sanitizeForFirebase(newBill);
+    if (db) {
+      setDoc(doc(db, 'bills', newBill.id), sanitized).catch((err) =>
+        console.error('Firestore generateMonthlyBill error:', err)
+      );
+    }
+    if (rtdb) {
+      setRtdb(ref(rtdb, `bills/${newBill.id}`), sanitized).catch((err) =>
+        console.error('RTDB generateMonthlyBill error:', err)
+      );
+    }
     showToast(`Generated & published bill for ${month}!`, 'success');
   };
 
@@ -271,13 +623,63 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     setBills(updated);
     LocalStorageManager.setBills(updated);
+    const updatedBill = updated.find((b) => b.id === billId);
+    if (updatedBill) {
+      const sanitized = sanitizeForFirebase(updatedBill);
+      if (db) {
+        setDoc(doc(db, 'bills', updatedBill.id), sanitized).catch((err) =>
+          console.error('Firestore markPaymentStatus error:', err)
+        );
+      }
+      if (rtdb) {
+        setRtdb(ref(rtdb, `bills/${updatedBill.id}`), sanitized).catch((err) =>
+          console.error('RTDB markPaymentStatus error:', err)
+        );
+      }
+    }
     showToast(`Payment status updated to ${paid ? 'PAID' : 'PENDING'}`, paid ? 'success' : 'info');
   };
 
   const updateSettings = (newSettings: FlatSettings) => {
     setSettings(newSettings);
     LocalStorageManager.setSettings(newSettings);
+    const sanitized = sanitizeForFirebase(newSettings);
+    if (db) {
+      setDoc(doc(db, 'settings', 'config'), sanitized).catch((err) =>
+        console.error('Firestore updateSettings error:', err)
+      );
+    }
+    if (rtdb) {
+      setRtdb(ref(rtdb, 'settings/config'), sanitized).catch((err) =>
+        console.error('RTDB updateSettings error:', err)
+      );
+    }
     showToast('Flat & payment settings saved!', 'success');
+  };
+
+  const clearDemoData = () => {
+    LocalStorageManager.clearDemoData();
+    const oldPolls = [...polls];
+    const oldResponses = [...responses];
+    const oldBills = [...bills];
+
+    setPolls([]);
+    setResponses([]);
+    setBills([]);
+
+    if (db) {
+      oldPolls.forEach((p) => deleteDoc(doc(db, 'polls', p.id)).catch(() => {}));
+      oldResponses.forEach((r) => deleteDoc(doc(db, 'responses', r.id)).catch(() => {}));
+      oldBills.forEach((b) => deleteDoc(doc(db, 'bills', b.id)).catch(() => {}));
+    }
+
+    if (rtdb) {
+      removeRtdb(ref(rtdb, 'polls')).catch(() => {});
+      removeRtdb(ref(rtdb, 'responses')).catch(() => {});
+      removeRtdb(ref(rtdb, 'bills')).catch(() => {});
+    }
+
+    showToast('All previous demo data cleared! Saved live in Firebase Cloud.', 'success');
   };
 
   const getTodayResponses = () => {
@@ -297,6 +699,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         activeTab,
         isDarkMode,
         toasts,
+        firebaseUser,
+        authLoading,
+        logout,
         setActiveTab,
         setCurrentUser: handleSetCurrentUser,
         toggleDarkMode,
@@ -311,6 +716,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         generateMonthlyBill,
         markPaymentStatus,
         updateSettings,
+        clearDemoData,
+        loginDirectly,
         getTodayResponses,
       }}
     >
