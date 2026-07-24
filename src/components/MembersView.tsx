@@ -17,6 +17,7 @@ import {
   Copy,
   Check,
   KeyRound,
+  MessageSquare,
 } from 'lucide-react';
 import { User, Role } from '../types';
 
@@ -74,6 +75,16 @@ export const MembersView: React.FC = () => {
     );
     window.open(`mailto:${m.email}?subject=${subject}&body=${body}`, '_blank');
     showToast(`Opened email client to invite ${m.name}`, 'info');
+  };
+
+  const sendWhatsAppInvite = (m: { name: string; email: string; phone?: string }) => {
+    const appUrl = window.location.origin;
+    const text = `Hi ${m.name}! 👋\n\nYou've been added to *${settings.flatName}* on our Tiffin Split app!\n\n📲 *App URL:* ${appUrl}\n📧 *Your Email:* ${m.email}\n\nPlease open the app to vote on daily meal polls and view your monthly bill splits!\n\nThank you!`;
+    const encoded = encodeURIComponent(text);
+    const cleanPhone = m.phone ? m.phone.replace(/[^0-9]/g, '') : '';
+    const url = cleanPhone ? `https://wa.me/${cleanPhone}?text=${encoded}` : `https://wa.me/?text=${encoded}`;
+    window.open(url, '_blank');
+    showToast(`Opening WhatsApp to invite ${m.name}`, 'info');
   };
 
   const copyInviteDetails = (m: { name: string; email: string; id: string }) => {
@@ -227,11 +238,18 @@ export const MembersView: React.FC = () => {
                   <div className="flex items-center justify-between gap-2">
                     <div className="flex items-center gap-1.5">
                       <button
+                        onClick={() => sendWhatsAppInvite(member)}
+                        className="px-2.5 py-1.5 rounded-xl bg-emerald-50 dark:bg-emerald-950/60 hover:bg-emerald-100 text-emerald-700 dark:text-emerald-300 font-bold text-[11px] flex items-center gap-1 transition-colors"
+                        title="Send WhatsApp Invite"
+                      >
+                        <MessageSquare className="w-3 h-3 text-emerald-600" /> WhatsApp
+                      </button>
+                      <button
                         onClick={() => sendEmailInvite(member)}
                         className="px-2.5 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 font-bold text-[11px] flex items-center gap-1 transition-colors"
                         title="Send Mailto Link"
                       >
-                        <Send className="w-3 h-3" /> Mail Client
+                        <Send className="w-3 h-3" /> Mail
                       </button>
                       <button
                         onClick={() => copyInviteDetails(member)}

@@ -17,7 +17,168 @@ import {
   ChevronLeft,
   ChevronRight,
 } from 'lucide-react';
-import { MealType, MealPoll } from '../types';
+import { MealType, MealPoll, MealResponse } from '../types';
+
+interface PollVotingSectionProps {
+  type: MealType;
+  poll: MealPoll;
+  vote: MealResponse | undefined;
+  currentUser: any;
+  submitMealResponse: (pollId: string, type: MealType, quantity: number, guestCount: number) => void;
+  showToast: (msg: string, type: 'success' | 'error' | 'info') => void;
+}
+
+const PollVotingSection: React.FC<PollVotingSectionProps> = ({
+  type,
+  poll,
+  vote,
+  currentUser,
+  submitMealResponse,
+  showToast,
+}) => {
+  const isLunch = type === 'lunch';
+  const hasVoted = vote !== undefined && vote !== null;
+  const isAdmin = currentUser.role === 'admin';
+
+  // Local draft state for voting
+  const [selectedQty, setSelectedQty] = useState<number>(vote?.quantity ?? 1);
+  const [selectedGuests, setSelectedGuests] = useState<number>(vote?.guestCount ?? 0);
+  const [isEditing, setIsEditing] = useState<boolean>(!hasVoted || isAdmin);
+
+  // Sync state if vote prop changes externally
+  React.useEffect(() => {
+    if (vote) {
+      setSelectedQty(vote.quantity);
+      setSelectedGuests(vote.guestCount);
+      if (!isAdmin) setIsEditing(false);
+    }
+  }, [vote, isAdmin]);
+
+  const totalSelected = selectedQty + selectedGuests;
+
+  const handleSaveVote = () => {
+    if (!poll.isOpen) {
+      showToast('This poll is closed and no longer accepting votes.', 'error');
+      return;
+    }
+    submitMealResponse(poll.id, type, selectedQty, selectedGuests);
+    showToast(`Your vote for ${type} (${totalSelected} tiffin${totalSelected !== 1 ? 's' : ''}) has been saved!`, 'success');
+    if (!isAdmin) {
+      setIsEditing(false);
+    }
+  };
+
+  // If already voted & non-admin member is locked in submitted view:
+  if (hasVoted && !isEditing && !isAdmin) {
+    return (
+      <div className="space-y-3.5">
+        <div className="p-4 rounded-2xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-900/60 flex items-center justify-between">
+          <div className="flex items-center gap-2.5">
+            <CheckCircle2 className="w-5 h-5 text-emerald-600 dark:text-emerald-400 shrink-0" />
+            <div>
+              <span className="text-xs font-extrabold text-emerald-900 dark:text-emerald-200 block">
+                Vote Recorded & Saved
+              </span>
+              <span className="text-xs text-emerald-700 dark:text-emerald-300 font-medium">
+                {vote.quantity} Self Tiffin{vote.quantity !== 1 ? 's' : ''} + {vote.guestCount} Guest Meal{vote.guestCount !== 1 ? 's' : ''} ({vote.totalCount} Total)
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <p className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-800/80 p-2.5 rounded-xl flex items-center justify-center gap-1.5">
+          <Lock className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+          Vote is locked. Only Flat Admin can edit responses once saved.
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <span className="text-xs font-bold text-slate-700 dark:text-slate-300">
+          Select Tiffin Quantity for Yourself:
+        </span>
+        {hasVoted && (
+          <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
+            <CheckCircle2 className="w-3.5 h-3.5" /> Saved: {vote?.totalCount} tiffins
+          </span>
+        )}
+      </div>
+
+      {/* Quantity Selectors */}
+      <div className="grid grid-cols-4 gap-2">
+        {[0, 1, 2, 3].map((qty) => {
+          const isSelected = selectedQty === qty;
+          return (
+            <button
+              key={`poll-vote-${type}-${qty}`}
+              disabled={!poll.isOpen}
+              onClick={() => setSelectedQty(qty)}
+              className={`py-2.5 px-2 rounded-2xl border text-xs font-extrabold transition-all flex flex-col items-center justify-center gap-0.5 ${
+                isSelected
+                  ? isLunch
+                    ? 'bg-amber-500 border-amber-600 text-white shadow-md'
+                    : 'bg-indigo-600 border-indigo-700 text-white shadow-md'
+                  : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700/50 disabled:opacity-50'
+              }`}
+            >
+              <span>{qty === 0 ? 'Not Ordering' : `${qty} Tiffin${qty > 1 ? 's' : ''}`}</span>
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Guests Count Selector */}
+      <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200/80 dark:border-slate-700/60 flex items-center justify-between">
+        <div>
+          <span className="text-xs font-bold text-slate-800 dark:text-slate-200 block">
+            Guest Meals
+          </span>
+          <span className="text-[10px] text-slate-500 dark:text-slate-400">
+            Extra tiffins for visitors
+          </span>
+        </div>
+        <div className="flex items-center gap-2">
+          <button
+            disabled={!poll.isOpen || selectedGuests <= 0}
+            onClick={() => setSelectedGuests((g) => Math.max(0, g - 1))}
+            className="w-8 h-8 rounded-xl bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-200 font-bold hover:bg-slate-100 disabled:opacity-40 flex items-center justify-center active:scale-95 transition-transform"
+          >
+            -
+          </button>
+          <span className="text-sm font-extrabold w-6 text-center text-slate-900 dark:text-white">
+            {selectedGuests}
+          </span>
+          <button
+            disabled={!poll.isOpen}
+            onClick={() => setSelectedGuests((g) => g + 1)}
+            className="w-8 h-8 rounded-xl bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-200 font-bold hover:bg-slate-100 disabled:opacity-40 flex items-center justify-center active:scale-95 transition-transform"
+          >
+            +
+          </button>
+        </div>
+      </div>
+
+      {/* SAVE VOTE BUTTON */}
+      <div className="pt-1">
+        <button
+          disabled={!poll.isOpen}
+          onClick={handleSaveVote}
+          className={`w-full py-3 px-4 rounded-2xl font-bold text-xs uppercase tracking-wider text-white shadow-lg transition-all flex items-center justify-center gap-2 ${
+            isLunch
+              ? 'bg-amber-600 hover:bg-amber-700 shadow-amber-200 dark:shadow-none'
+              : 'bg-indigo-600 hover:bg-indigo-700 shadow-indigo-200 dark:shadow-none'
+          } disabled:opacity-50`}
+        >
+          <CheckCircle2 className="w-4 h-4" />
+          {hasVoted ? 'Update Saved Vote' : 'Submit & Save Vote'} ({totalSelected} Tiffin{totalSelected !== 1 ? 's' : ''})
+        </button>
+      </div>
+    </div>
+  );
+};
 
 export const MealPollView: React.FC = () => {
   const {
@@ -29,6 +190,7 @@ export const MealPollView: React.FC = () => {
     updatePoll,
     togglePollStatus,
     submitMealResponse,
+    showToast,
   } = useApp();
 
   const [selectedDate, setSelectedDate] = useState<string>(
@@ -225,100 +387,31 @@ export const MealPollView: React.FC = () => {
               <p className="text-xs text-slate-500 dark:text-slate-400 mb-3">
                 No menu poll has been posted for today's {type} yet.
               </p>
-              <button
-                onClick={() => openCreateModal(type)}
-                className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs shadow-md shadow-indigo-200 dark:shadow-none transition-all inline-flex items-center gap-1.5 uppercase tracking-wider"
-              >
-                <PlusCircle className="w-4 h-4" /> Create {type} Poll
-              </button>
+              {currentUser.role === 'admin' ? (
+                <button
+                  onClick={() => openCreateModal(type)}
+                  className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs shadow-md shadow-indigo-200 dark:shadow-none transition-all inline-flex items-center gap-1.5 uppercase tracking-wider"
+                >
+                  <PlusCircle className="w-4 h-4" /> Create {type} Poll
+                </button>
+              ) : (
+                <p className="text-[11px] font-semibold text-slate-400 dark:text-slate-500 italic">
+                  Only Flat Admin can create meal polls.
+                </p>
+              )}
             </div>
           )}
 
           {/* Voting Controls (If Poll Exists) */}
           {poll && (
-            <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-bold text-slate-700 dark:text-slate-300">
-                  Select Tiffin Quantity for Yourself:
-                </span>
-                {vote && vote.totalCount > 0 && (
-                  <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
-                    <CheckCircle2 className="w-3.5 h-3.5" /> Voted: {vote.totalCount} tiffins
-                  </span>
-                )}
-              </div>
-
-              {/* Quantity Selectors */}
-              <div className="grid grid-cols-4 gap-2">
-                {[0, 1, 2, 3].map((qty) => {
-                  const isSelected = (vote?.quantity ?? null) === qty;
-                  return (
-                    <button
-                      key={`poll-vote-${type}-${qty}`}
-                      disabled={!poll.isOpen || isLockedForMember}
-                      onClick={() => handleVote(poll, type, qty, vote?.guestCount || 0)}
-                      className={`py-2.5 px-2 rounded-2xl border text-xs font-extrabold transition-all flex flex-col items-center justify-center gap-0.5 ${
-                        isSelected
-                          ? isLunch
-                            ? 'bg-amber-500 border-amber-600 text-white shadow-md'
-                            : 'bg-indigo-600 border-indigo-700 text-white shadow-md'
-                          : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700/50 disabled:opacity-50'
-                      }`}
-                    >
-                      <span>{qty === 0 ? 'Not Ordering' : `${qty} Tiffin${qty > 1 ? 's' : ''}`}</span>
-                    </button>
-                  );
-                })}
-              </div>
-
-              {/* Guests Count Selector */}
-              <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200/80 dark:border-slate-700/60 flex items-center justify-between">
-                <div>
-                  <span className="text-xs font-bold text-slate-800 dark:text-slate-200 block">
-                    Guest Meals
-                  </span>
-                  <span className="text-[10px] text-slate-500 dark:text-slate-400">
-                    Extra tiffins for visitors
-                  </span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <button
-                    disabled={!poll.isOpen || isLockedForMember || (vote?.guestCount || 0) <= 0}
-                    onClick={() =>
-                      handleVote(
-                        poll,
-                        type,
-                        vote?.quantity || 0,
-                        Math.max(0, (vote?.guestCount || 0) - 1)
-                      )
-                    }
-                    className="w-8 h-8 rounded-xl bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-200 font-bold hover:bg-slate-100 disabled:opacity-40 flex items-center justify-center"
-                  >
-                    -
-                  </button>
-                  <span className="text-sm font-extrabold w-6 text-center text-slate-900 dark:text-white">
-                    {vote?.guestCount || 0}
-                  </span>
-                  <button
-                    disabled={!poll.isOpen || isLockedForMember}
-                    onClick={() =>
-                      handleVote(poll, type, vote?.quantity || 0, (vote?.guestCount || 0) + 1)
-                    }
-                    className="w-8 h-8 rounded-xl bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-200 font-bold hover:bg-slate-100 disabled:opacity-40 flex items-center justify-center"
-                  >
-                    +
-                  </button>
-                </div>
-              </div>
-
-              {/* Locked response notice for member */}
-              {isVoted && currentUser.role !== 'admin' && (
-                <p className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-800/80 p-2.5 rounded-xl flex items-center justify-center gap-1.5 mt-2">
-                  <Lock className="w-3.5 h-3.5 text-amber-500 shrink-0" />
-                  Your vote is recorded and locked. Only Flat Admin can edit responses.
-                </p>
-              )}
-            </div>
+            <PollVotingSection
+              type={type}
+              poll={poll}
+              vote={vote}
+              currentUser={currentUser}
+              submitMealResponse={submitMealResponse}
+              showToast={showToast}
+            />
           )}
         </div>
 

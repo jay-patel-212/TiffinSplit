@@ -33,8 +33,8 @@ export const DashboardView: React.FC = () => {
   const today = new Date().toISOString().split('T')[0];
 
   // Today's polls
-  const lunchPoll = polls.find((p) => p.date === today && p.type === 'lunch') || polls[0];
-  const dinnerPoll = polls.find((p) => p.date === today && p.type === 'dinner') || polls[1];
+  const lunchPoll = polls.find((p) => p.date === today && p.type === 'lunch');
+  const dinnerPoll = polls.find((p) => p.date === today && p.type === 'dinner');
 
   // Responses
   const todayResponses = responses.filter((r) => r.date === today);
@@ -50,11 +50,16 @@ export const DashboardView: React.FC = () => {
   const myLunchVote = lunchResponses.find((r) => r.userId === currentUser.id);
   const myDinnerVote = dinnerResponses.find((r) => r.userId === currentUser.id);
 
-  // Latest bill calculations
-  const latestBill = bills[0];
-  const pendingItems = latestBill ? latestBill.items.filter((i) => !i.paid) : [];
+  // Latest bill & current month calculations
+  const currentMonthStr = new Date().toISOString().slice(0, 7);
+  const currentMonthBill = bills.find((b) => b.month === currentMonthStr) || bills[0];
+
+  const currentMonthResponses = responses.filter((r) => r.date.startsWith(currentMonthStr));
+  const currentMonthTotalMeals = currentMonthResponses.reduce((acc, curr) => acc + curr.totalCount, 0);
+
+  const pendingItems = currentMonthBill ? currentMonthBill.items.filter((i) => !i.paid) : [];
   const totalPendingAmount = pendingItems.reduce((acc, curr) => acc + curr.amount, 0);
-  const myPendingBillItem = latestBill?.items.find((i) => i.userId === currentUser.id);
+  const myPendingBillItem = currentMonthBill?.items.find((i) => i.userId === currentUser.id);
 
   // Quick voting helper
   const handleQuickVote = (type: 'lunch' | 'dinner', qty: number) => {
@@ -179,10 +184,22 @@ export const DashboardView: React.FC = () => {
             </div>
           </div>
           <div className="text-2xl font-black font-heading text-slate-900 dark:text-white">
-            {settings.currency}{latestBill?.totalAmount ? latestBill.totalAmount.toLocaleString() : '14,500'}
+            {currentMonthBill ? (
+              `${settings.currency}${currentMonthBill.totalAmount.toLocaleString()}`
+            ) : currentMonthTotalMeals > 0 ? (
+              `${currentMonthTotalMeals} meals`
+            ) : (
+              `${settings.currency}0`
+            )}
           </div>
           <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1 truncate">
-            ~{settings.currency}{latestBill?.costPerMeal ? latestBill.costPerMeal.toFixed(0) : '116'} / meal
+            {currentMonthBill ? (
+              `~${settings.currency}${currentMonthBill.costPerMeal.toFixed(0)}/meal (${currentMonthBill.month})`
+            ) : currentMonthTotalMeals > 0 ? (
+              `Ordered in ${new Date().toLocaleDateString('en-US', { month: 'short' })}`
+            ) : (
+              `No orders yet this month`
+            )}
           </p>
         </div>
       </div>
@@ -211,62 +228,122 @@ export const DashboardView: React.FC = () => {
           <div className="p-4 rounded-2xl bg-amber-50/50 dark:bg-amber-950/20 border border-amber-200/80 dark:border-amber-900/50">
             <div className="flex items-center justify-between mb-2">
               <span className="text-xs font-bold text-amber-900 dark:text-amber-300 flex items-center gap-1.5">
-                <Sun className="w-4 h-4 text-amber-500" /> Lunch (Deadline: {lunchPoll?.deadline || '11:00 AM'})
+                <Sun className="w-4 h-4 text-amber-500" /> Lunch {lunchPoll ? `(Deadline: ${lunchPoll.deadline})` : ''}
               </span>
               <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-amber-100 dark:bg-amber-900/50 text-amber-800 dark:text-amber-300">
-                Current: {myLunchVote ? `${myLunchVote.quantity} self + ${myLunchVote.guestCount} guest` : 'Not Voted'}
+                {lunchPoll
+                  ? myLunchVote
+                    ? `Saved: ${myLunchVote.totalCount} tiffins`
+                    : 'Not Voted'
+                  : 'Poll Not Posted'}
               </span>
             </div>
             <p className="text-xs text-slate-600 dark:text-slate-400 mb-3 line-clamp-1 italic">
-              "{lunchPoll?.description || 'Paneer + Dal + Rice'}"
+              {lunchPoll ? `"${lunchPoll.description}"` : 'No lunch poll posted for today yet.'}
             </p>
-            <div className="flex items-center gap-2">
-              <span className="text-xs font-bold text-slate-500 dark:text-slate-400">Self Tiffins:</span>
-              {[0, 1, 2, 3].map((qty) => (
-                <button
-                  key={`lunch-qty-${qty}`}
-                  onClick={() => handleQuickVote('lunch', qty)}
-                  className={`flex-1 py-1.5 text-xs font-extrabold rounded-xl border transition-all ${
-                    (myLunchVote?.quantity ?? null) === qty
-                      ? 'bg-amber-500 border-amber-600 text-white shadow-sm'
-                      : 'bg-white dark:bg-slate-800 border-amber-200 dark:border-amber-900/60 text-slate-700 dark:text-slate-300 hover:bg-amber-100/50'
-                  }`}
-                >
-                  {qty === 0 ? 'None' : `${qty}`}
-                </button>
-              ))}
-            </div>
+            {lunchPoll ? (
+              lunchPoll.isOpen ? (
+                currentUser.role !== 'admin' && myLunchVote ? (
+                  <div className="flex items-center justify-between bg-amber-100/60 dark:bg-amber-900/40 p-2.5 rounded-xl border border-amber-200 dark:border-amber-800">
+                    <span className="text-xs font-bold text-amber-900 dark:text-amber-200">
+                      Vote Saved ({myLunchVote.quantity} Self + {myLunchVote.guestCount} Guest)
+                    </span>
+                    <button
+                      onClick={() => setActiveTab('polls')}
+                      className="text-[11px] font-bold text-amber-800 dark:text-amber-300 underline"
+                    >
+                      View Details
+                    </button>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-bold text-slate-500 dark:text-slate-400">Quick Vote:</span>
+                    {[0, 1, 2, 3].map((qty) => (
+                      <button
+                        key={`lunch-qty-${qty}`}
+                        onClick={() => handleQuickVote('lunch', qty)}
+                        className={`flex-1 py-1.5 text-xs font-extrabold rounded-xl border transition-all ${
+                          (myLunchVote?.quantity ?? null) === qty
+                            ? 'bg-amber-500 border-amber-600 text-white shadow-sm'
+                            : 'bg-white dark:bg-slate-800 border-amber-200 dark:border-amber-900/60 text-slate-700 dark:text-slate-300 hover:bg-amber-100/50'
+                        }`}
+                      >
+                        {qty === 0 ? 'None' : `${qty}`}
+                      </button>
+                    ))}
+                  </div>
+                )
+              ) : (
+                <div className="text-xs font-medium text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-800/60 p-2 rounded-xl text-center">
+                  Poll Closed
+                </div>
+              )
+            ) : (
+              <div className="text-xs font-medium text-slate-400 dark:text-slate-500 bg-slate-100/60 dark:bg-slate-800/40 p-2 rounded-xl text-center italic">
+                No active poll to select options
+              </div>
+            )}
           </div>
 
           {/* Dinner Quick Box */}
           <div className="p-4 rounded-2xl bg-indigo-50/50 dark:bg-indigo-950/20 border border-indigo-200/80 dark:border-indigo-900/50">
             <div className="flex items-center justify-between mb-2">
               <span className="text-xs font-bold text-indigo-900 dark:text-indigo-300 flex items-center gap-1.5">
-                <Moon className="w-4 h-4 text-indigo-500" /> Dinner (Deadline: {dinnerPoll?.deadline || '06:00 PM'})
+                <Moon className="w-4 h-4 text-indigo-500" /> Dinner {dinnerPoll ? `(Deadline: ${dinnerPoll.deadline})` : ''}
               </span>
               <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-indigo-100 dark:bg-indigo-900/50 text-indigo-800 dark:text-indigo-300">
-                Current: {myDinnerVote ? `${myDinnerVote.quantity} self + ${myDinnerVote.guestCount} guest` : 'Not Voted'}
+                {dinnerPoll
+                  ? myDinnerVote
+                    ? `Saved: ${myDinnerVote.totalCount} tiffins`
+                    : 'Not Voted'
+                  : 'Poll Not Posted'}
               </span>
             </div>
             <p className="text-xs text-slate-600 dark:text-slate-400 mb-3 line-clamp-1 italic">
-              "{dinnerPoll?.description || 'Roti + Sabji + Dal'}"
+              {dinnerPoll ? `"${dinnerPoll.description}"` : 'No dinner poll posted for today yet.'}
             </p>
-            <div className="flex items-center gap-2">
-              <span className="text-xs font-bold text-slate-500 dark:text-slate-400">Self Tiffins:</span>
-              {[0, 1, 2, 3].map((qty) => (
-                <button
-                  key={`dinner-qty-${qty}`}
-                  onClick={() => handleQuickVote('dinner', qty)}
-                  className={`flex-1 py-1.5 text-xs font-extrabold rounded-xl border transition-all ${
-                    (myDinnerVote?.quantity ?? null) === qty
-                      ? 'bg-indigo-600 border-indigo-700 text-white shadow-sm'
-                      : 'bg-white dark:bg-slate-800 border-indigo-200 dark:border-indigo-900/60 text-slate-700 dark:text-slate-300 hover:bg-indigo-100/50'
-                  }`}
-                >
-                  {qty === 0 ? 'None' : `${qty}`}
-                </button>
-              ))}
-            </div>
+            {dinnerPoll ? (
+              dinnerPoll.isOpen ? (
+                currentUser.role !== 'admin' && myDinnerVote ? (
+                  <div className="flex items-center justify-between bg-indigo-100/60 dark:bg-indigo-900/40 p-2.5 rounded-xl border border-indigo-200 dark:border-indigo-800">
+                    <span className="text-xs font-bold text-indigo-900 dark:text-indigo-200">
+                      Vote Saved ({myDinnerVote.quantity} Self + {myDinnerVote.guestCount} Guest)
+                    </span>
+                    <button
+                      onClick={() => setActiveTab('polls')}
+                      className="text-[11px] font-bold text-indigo-800 dark:text-indigo-300 underline"
+                    >
+                      View Details
+                    </button>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-bold text-slate-500 dark:text-slate-400">Quick Vote:</span>
+                    {[0, 1, 2, 3].map((qty) => (
+                      <button
+                        key={`dinner-qty-${qty}`}
+                        onClick={() => handleQuickVote('dinner', qty)}
+                        className={`flex-1 py-1.5 text-xs font-extrabold rounded-xl border transition-all ${
+                          (myDinnerVote?.quantity ?? null) === qty
+                            ? 'bg-indigo-600 border-indigo-700 text-white shadow-sm'
+                            : 'bg-white dark:bg-slate-800 border-indigo-200 dark:border-indigo-900/60 text-slate-700 dark:text-slate-300 hover:bg-indigo-100/50'
+                        }`}
+                      >
+                        {qty === 0 ? 'None' : `${qty}`}
+                      </button>
+                    ))}
+                  </div>
+                )
+              ) : (
+                <div className="text-xs font-medium text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-800/60 p-2 rounded-xl text-center">
+                  Poll Closed
+                </div>
+              )
+            ) : (
+              <div className="text-xs font-medium text-slate-400 dark:text-slate-500 bg-slate-100/60 dark:bg-slate-800/40 p-2 rounded-xl text-center italic">
+                No active poll to select options
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -385,7 +462,7 @@ export const DashboardView: React.FC = () => {
             <AlertCircle className="w-6 h-6 text-amber-500 shrink-0 mt-0.5" />
             <div>
               <h4 className="font-bold text-sm text-slate-900 dark:text-white">
-                Pending Tiffin Bill for {latestBill.month}
+                Pending Tiffin Bill for {currentMonthBill?.month || 'Current Month'}
               </h4>
               <p className="text-xs text-slate-600 dark:text-slate-300 mt-0.5">
                 You have an unpaid bill of <span className="font-extrabold text-amber-600 dark:text-amber-400">{settings.currency}{myPendingBillItem.amount.toLocaleString()}</span> ({myPendingBillItem.totalMeals} meals).
